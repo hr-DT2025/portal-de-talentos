@@ -1,10 +1,18 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Mood } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = import.meta.env.VITE_API_KEY || '';
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export const getEmotionalFeedback = async (mood: Mood, userName: string): Promise<string> => {
+  // Si no hay API key configurada, retornar mensaje por defecto
+  if (!genAI) {
+    return "Tu bienestar es importante para nosotros. ¡Que tengas un buen día!";
+  }
+
   try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
     const prompt = `
       El usuario ${userName} ha registrado su estado de ánimo hoy como: "${mood}".
       Actúa como un coach empático de bienestar corporativo y "Salario Emocional".
@@ -13,12 +21,9 @@ export const getEmotionalFeedback = async (mood: Mood, userName: string): Promis
       Responde en Español.
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text || "¡Gracias por compartir! Recuerda tomar descansos activos.";
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text() || "¡Gracias por compartir! Recuerda tomar descansos activos.";
   } catch (error) {
     console.error("Error fetching AI feedback:", error);
     return "Tu bienestar es importante para nosotros. ¡Que tengas un buen día!";
