@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, User, LogOut, HeartHandshake, MessageSquare, FolderOpen, Building, Users } from 'lucide-react';
+import { LayoutDashboard, FileText, User, LogOut, MessageSquare, FolderOpen, Building, Users } from 'lucide-react';
 import { useAuth } from '../App';
 import { Role } from '../types';
 
@@ -20,9 +20,9 @@ export default function Sidebar() {
   return (
     <div className="flex flex-col h-full bg-onix">
       <div className="p-6 hidden lg:block">
-        <div className="flex items-center space-x-2 text-white mb-6">
-          <HeartHandshake size={32} className="text-topacio" />
-          <span className="text-2xl font-bold tracking-tight">CollabConnect</span>
+        <div className="flex items-center space-x-3 text-white mb-6">
+          <img src="/logo.png" alt="Disruptive Talent" className="w-10 h-10" />
+          <span className="text-xl font-bold tracking-tight">Disruptive Talent</span>
         </div>
         <div className="text-xs text-topacio-300 uppercase tracking-wider font-semibold">
           {isHR ? 'Portal de RRHH' : 'Portal del Colaborador'}
