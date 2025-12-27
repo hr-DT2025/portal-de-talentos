@@ -1,5 +1,4 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { Profile, Empresa, Solicitud, ChatHistory } from '../types/database';
 
 // ==================== AUTENTICACIÓN ====================
 
@@ -19,9 +18,6 @@ export const authService = {
 
   /**
    * Registro actualizado para RBAC (Role Based Access Control)
-   * @param role - El rol calculado por el sistema (SuperAdmin, Director, HR, Colaborador)
-   * @param jobTitle - El cargo real escrito por el usuario (CEO, Diseñador, etc.)
-   * @param companyName - El nombre de la empresa (para asignación temporal)
    */
   async register(
     email: string, 
@@ -41,7 +37,7 @@ export const authService = {
           full_name: fullName,
           role: role,            // Vital para tus políticas de seguridad
           job_title: jobTitle,   // Se guarda en profiles mediante el Trigger
-          company_temp: companyName // Se guarda para que un Admin valide la empresa después
+          company_temp: companyName // Se guarda para que un Admin valide después
         },
       },
     });
@@ -79,7 +75,7 @@ export const profileService = {
       .eq('id', id)
       .single();
 
-    if (error) return null; // Retorna null si no existe perfil aún
+    if (error) return null; 
     return data;
   },
 
@@ -124,6 +120,17 @@ export const empresaService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async create(empresaData: any) {
+    const { data, error } = await supabase
+      .from('empresas')
+      .insert(empresaData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };
 
@@ -146,7 +153,7 @@ export const solicitudService = {
   async getAll() {
     const { data, error } = await supabase
       .from('solicitudes')
-      .select('*, profiles(full_name, email)') // Traer nombre del colaborador
+      .select('*, profiles(full_name, email)') 
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -196,4 +203,48 @@ export const chatService = {
     return data;
   },
 
-  // Obtener historial
+  // Obtener historial entre dos personas
+  async getHistory(user1: string, user2: string) {
+    const { data, error } = await supabase
+      .from('chat_history')
+      .select('*')
+      .or(`and(emisor_id.eq.${user1},receptor_id.eq.${user2}),and(emisor_id.eq.${user2},receptor_id.eq.${user1})`)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+};
+
+// ==================== GESTIÓN MASIVA (HR) ====================
+
+export const adminService = {
+  // Carga masiva de colaboradores a la tabla de registro (Pre-registro)
+  async uploadBatchCollaborators(collaborators: any[]) {
+    if (!isSupabaseConfigured()) throw new Error('Supabase no configurado');
+
+    // Mapeamos las columnas del CSV a las columnas exactas de tu BD
+    const records = collaborators.map(c => ({
+      'Nombres y Apellidos': c.nombre,
+      'Correo corporativo': c.email,
+      'Rol': c.cargo || 'Colaborador',
+      'Departamento': c.departamento || 'Sin asignar',
+      'Status': 'Pendiente Registro',
+      'Fecha de Ingreso': new Date().toISOString().split('T')[0]
+    }));
+
+    const { data, error } = await supabase
+      .from('registro_colaboradores')
+      .insert(records)
+      .select();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Generar link de invitación
+  generateInviteLink(companyCode: string) {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/registro?company=${encodeURIComponent(companyCode)}`;
+  }
+};
