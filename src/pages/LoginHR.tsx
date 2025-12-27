@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { dataService } from '../services/dataService';
-import { HeartHandshake, Loader2, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginHR() {
   const { login, user } = useAuth();
@@ -43,9 +43,15 @@ export default function LoginHR() {
       const user = await dataService.login(email, password, 'hr');
       login(user);
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth error", error);
-      setError("Error en autenticación. Por favor intente nuevamente.");
+      if (error?.message?.includes('Invalid login credentials')) {
+        setError("Credenciales inválidas. Verifica tu correo y contraseña.");
+      } else if (error?.message?.includes('Email not confirmed')) {
+        setError("Debes confirmar tu correo electrónico antes de iniciar sesión.");
+      } else {
+        setError("Error en autenticación. Por favor intente nuevamente.");
+      }
     } finally {
       setLoading(false);
     }
@@ -59,14 +65,14 @@ export default function LoginHR() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-onix-50 to-zafiro-50 p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="bg-gradient-to-r from-onix to-zafiro p-8 text-center">
-          <div className="mx-auto bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mb-4 backdrop-blur-sm">
-            <HeartHandshake className="text-white h-8 w-8" />
+          <div className="mx-auto w-20 h-20 mb-4">
+            <img src="/logo.png" alt="Disruptive Talent" className="w-full h-full object-contain" />
           </div>
-          <h2 className="text-3xl font-bold text-white mb-2">
-            Portal de RRHH
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Disruptive Talent
           </h2>
           <p className="text-zafiro-100">
-            Accede al panel de administración de Recursos Humanos
+            Portal de Recursos Humanos
           </p>
         </div>
 
