@@ -1,43 +1,48 @@
 import { User, Role, Project, Request, RequestStatus, RequestType, Company, ChatMessage, EmployeeFile } from '../types';
 import { authService, profileService, empresaService, solicitudService, chatService } from './supabaseService';
 
-// ==================== DATA SERVICE (REAL SUPABASE ONLY) ====================
-// Sin datos de relleno. Si falla, lanza error. Si está vacío, devuelve array vacío.
+// ==================== DATA SERVICE (REAL SUPABASE) ====================
 
 export const dataService = {
   // --- Autenticación ---
+  
   login: async (email: string, password: string, _userType: 'collaborator' | 'hr'): Promise<User> => {
     try {
-      // 1. Autenticar en Supabase Auth
+      // 1. Autenticar
       const { user: authUser } = await authService.login(email, password);
-      
       if (!authUser) throw new Error('Usuario no encontrado');
 
-      // 2. Obtener perfil de la tabla 'profiles'
+      // 2. Obtener perfil
       const profile = await profileService.getById(authUser.id);
+      if (!profile) throw new Error('Perfil no encontrado en base de datos');
 
-      if (!profile) {
-        throw new Error('El usuario existe en Auth pero no tiene Perfil en base de datos.');
+      // 3. Mapear roles de Base de Datos a la App
+      // Supabase Role: 'SuperAdmin' | 'Director' | 'HR' | 'Colaborador'
+      // App Role (Frontend): Role.HR | Role.COLLABORATOR (Podrías necesitar expandir tu enum Role en types.ts)
+      
+      let appRole = Role.COLLABORATOR;
+      if (profile.role === 'HR' || profile.role === 'SuperAdmin' || profile.role === 'Director') {
+        appRole = Role.HR; // Por ahora mapeamos roles altos a HR para que vean dashboard administrativo
       }
 
-      // 3. Mapear DB -> Frontend User
       return {
         id: profile.id,
         email: profile.email,
-        fullName: profile.full_name || 'Sin Nombre',
-        role: profile.role === 'HR' ? Role.HR : Role.COLLABORATOR,
-        department: profile.area || 'Sin asignar',
-        leader: 'Sin asignar',
+        fullName: profile.full_name || 'Usuario',
+        role: appRole,
+        // Usamos el job_title que guardamos en el registro
+        department: profile.job_title || profile.area || 'Sin cargo', 
+        leader: 'Por asignar',
         startDate: profile.fecha_ingreso || new Date().toISOString(),
-        ptoTotal: 15, // Valor por defecto (podría venir de DB en el futuro)
+        ptoTotal: 15,
         ptoTaken: 0,
         skills: [],
         area: profile.area || '',
-        avatarUrl: profile.avatar_url || 'https://ui-avatars.com/api/?name=' + (profile.full_name || 'User')
+        avatarUrl: profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.full_name}`
       } as User;
 
     } catch (error) {
-      console.error('Error en Login Real:', error);
+      console.error('Login error:', error);
       throw error;
     }
   },
@@ -46,42 +51,41 @@ export const dataService = {
     fullName: string;
     email: string;
     password: string;
-    role: string;
+    role: string;      // Rol del sistema (SuperAdmin, Director, etc.)
+    jobTitle: string;  // Cargo real (CEO, Diseñador...)
     companyName: string;
   }): Promise<User> => {
     try {
-      // 1. Registro en Auth (El Trigger de la DB crea el perfil automáticamente)
+      // 1. Registro en Auth enviando los metadatos nuevos
       const { user: authUser } = await authService.register(
         userData.email, 
         userData.password, 
         userData.fullName, 
-        userData.role
+        userData.role,     // Enviamos rol calculado
+        userData.jobTitle, // Enviamos cargo real
+        userData.companyName
       );
 
-      if (!authUser) throw new Error('Error al crear usuario');
+      if (!authUser) throw new Error('Error creando usuario');
 
-      // 2. Retornar estructura de usuario para que la App entre al dashboard inmediatamente
+      // 2. Retornar usuario temporal para la UI
       return {
         id: authUser.id,
         email: userData.email,
         fullName: userData.fullName,
-        role: userData.role === 'HR' ? Role.HR : Role.COLLABORATOR,
-        department: 'Por asignar',
-        leader: 'Por asignar',
+        role: userData.role === 'Colaborador' ? Role.COLLABORATOR : Role.HR,
+        department: userData.jobTitle, // Mostramos el cargo inmediatamente
+        leader: '',
         startDate: new Date().toISOString(),
-        ptoTotal: 15,
+        ptoTotal: 0,
         ptoTaken: 0,
         skills: [],
         area: '',
-        idType: '',
-        idNumber: '',
-        personalEmail: '',
-        mobilePhone: '',
-        avatarUrl: 'https://ui-avatars.com/api/?name=' + userData.fullName
-      };
+        avatarUrl: `https://ui-avatars.com/api/?name=${userData.fullName}`
+      } as User;
 
     } catch (error) {
-      console.error('Error en Registro Real:', error);
+      console.error('Register error:', error);
       throw error;
     }
   },
@@ -92,12 +96,17 @@ export const dataService = {
       const profile = await profileService.getById(id);
       if (!profile) throw new Error('Usuario no encontrado');
 
+      let appRole = Role.COLLABORATOR;
+      if (['HR', 'Director', 'SuperAdmin'].includes(profile.role)) {
+        appRole = Role.HR;
+      }
+
       return {
         id: profile.id,
         email: profile.email,
         fullName: profile.full_name || '',
-        role: profile.role === 'HR' ? Role.HR : Role.COLLABORATOR,
-        department: profile.area || '',
+        role: appRole,
+        department: profile.job_title || profile.area || '',
         leader: '',
         startDate: profile.fecha_ingreso || new Date().toISOString(),
         ptoTotal: 15,
@@ -107,7 +116,7 @@ export const dataService = {
         avatarUrl: profile.avatar_url || ''
       } as User;
     } catch (error) {
-      console.error('Error obteniendo usuario:', error);
+      console.error(error);
       throw error;
     }
   },
@@ -119,124 +128,154 @@ export const dataService = {
       return empresas.map(e => ({
         id: e.id,
         name: e.nombre,
-        businessId: e.rut || '',
-        industry: e.rubro || '',
-        address: e.direccion || '',
-        phone: e.telefono || '',
-        contactEmail: e.email_contacto || '',
+        businessId: e.nit_identificacion || '',
+        industry: '',
+        address: '',
+        phone: '',
+        contactEmail: '',
         hrManagerId: '',
         createdAt: e.created_at,
         collaborators: []
       }));
     } catch (error) {
-      console.error('Error obteniendo empresas:', error);
-      return []; // Retorna lista vacía si falla o no hay datos
+      console.error(error);
+      return [];
     }
   },
 
-  createCompany: async (companyData: Omit<Company, 'id' | 'createdAt' | 'collaborators'>): Promise<Company> => {
-    // TODO: Implementar lógica real de creación en supabaseService si se requiere
-    console.warn("createCompany: Aún no implementado en backend real");
-    throw new Error("Función no implementada en Backend");
+  createCompany: async (_companyData: any): Promise<Company> => {
+    // Implementar si es necesario
+    throw new Error("Not implemented yet");
   },
 
   getCollaboratorsByCompany: async (_companyId: string): Promise<User[]> => {
-    // TODO: Implementar filtro real en DB
+    // Implementar lógica de obtener usuarios por empresa
     return [];
   },
 
   // --- Proyectos ---
   getProjects: async (): Promise<Project[]> => {
-    // Si no tienes tabla de proyectos, retorna vacío
     return [];
   },
 
   // --- Solicitudes ---
   getRequests: async (userId?: string): Promise<Request[]> => {
     try {
-      // Si hay userId traemos solo las suyas, si no (y es HR), habría que traer todas
+      // IMPORTANTE: Aquí deberíamos diferenciar quién pide los datos.
+      // Por ahora, si pasas userId, trae las de ese usuario.
+      // Si eres Admin/HR, deberías usar otro método o dejar que RLS filtre.
+      
+      let requests;
       if (userId) {
-        const requests = await solicitudService.getByUser(userId);
-        return requests.map(r => ({
-          id: r.id,
-          userId: r.colaborador_id, // Corregido: mapeo a columna real
-          type: r.tipo as RequestType,
-          details: r.detalles || '',
-          date: r.created_at,
-          status: mapStatusFromSupabase(r.estatus || 'Pendiente'),
-          companyName: '' 
-        }));
+        requests = await solicitudService.getByUser(userId);
+      } else {
+        // Si no hay ID, asumimos que es un Admin pidiendo todo
+        // La política RLS en Supabase decidirá si puede ver todo o solo su empresa
+        requests = await solicitudService.getAll();
       }
-      return [];
+
+      return requests.map(r => ({
+        id: r.id,
+        userId: r.colaborador_id,
+        type: r.tipo as RequestType,
+        details: r.detalles || '',
+        date: r.created_at,
+        status: mapStatusFromSupabase(r.estatus || 'Pendiente'),
+        companyName: '' 
+      }));
     } catch (error) {
-      console.error('Error obteniendo solicitudes:', error);
+      console.error(error);
       return [];
     }
   },
 
   getAllRequests: async (): Promise<Request[]> => {
-    // Para HR: Implementar en supabaseService un getAll()
-    return [];
+    const requests = await solicitudService.getAll();
+    return requests.map(r => ({
+      id: r.id,
+      userId: r.colaborador_id,
+      type: r.tipo as RequestType,
+      details: r.detalles || '',
+      date: r.created_at,
+      status: mapStatusFromSupabase(r.estatus || 'Pendiente'),
+      companyName: '' 
+    }));
   },
 
   createRequest: async (type: RequestType, details: string, userId: string, companyName?: string): Promise<Request> => {
-    // TODO: Conectar con solicitudService.create (necesitas implementar el create real)
-    console.warn("createRequest: Falta implementar inserción en tabla 'solicitudes'");
+    // Necesitas implementar getProfile para saber la empresa_id del usuario
+    const profile = await profileService.getById(userId);
     
-    // Retornamos un objeto temporal para que la UI no rompa, pero idealmente debe guardar en DB
+    if (!profile || !profile.empresa_id) {
+      // Si no tiene empresa asignada, no puede crear solicitud (o se crea sin empresa)
+      console.warn("Usuario sin empresa intentando crear solicitud");
+    }
+
+    const newReq = await solicitudService.create({
+      colaborador_id: userId,
+      tipo: type,
+      detalles: details,
+      empresa_id: profile?.empresa_id, // Puede ser null
+      estatus: 'Pendiente'
+    });
+
     return {
-      id: 'temp-id',
-      userId,
-      type,
-      details,
-      date: new Date().toISOString(),
+      id: newReq.id,
+      userId: newReq.colaborador_id,
+      type: newReq.tipo as RequestType,
+      details: newReq.detalles,
+      date: newReq.created_at,
       status: RequestStatus.PENDING,
-      companyName
+      companyName: companyName
     };
   },
 
   updateRequestStatus: async (_requestId: string, _status: RequestStatus): Promise<Request> => {
-    throw new Error("Update Request no implementado en backend");
+    throw new Error("Update request not implemented");
   },
 
   // --- Chat ---
   getChatMessages: async (userId: string, hrId: string): Promise<ChatMessage[]> => {
     try {
-      // Implementar lógica real de historial si existe la tabla
-      return [];
+      const msgs = await chatService.getHistory(userId, hrId);
+      return msgs.map(m => ({
+        id: m.id,
+        senderId: m.emisor_id,
+        receiverId: m.receptor_id,
+        message: m.mensaje,
+        timestamp: m.created_at,
+        isFromHR: m.emisor_id === hrId 
+      }));
     } catch (error) {
+      console.error(error);
       return [];
     }
   },
 
   sendMessage: async (senderId: string, receiverId: string, message: string, isFromHR: boolean): Promise<ChatMessage> => {
-    // 1. Guardar en Base de Datos Real
     try {
       const savedMsg = await chatService.sendMessage(senderId, receiverId, message);
       
-      const newMessage: ChatMessage = {
-        id: savedMsg.id,
-        senderId: savedMsg.emisor_id || senderId,
-        receiverId: savedMsg.receptor_id || receiverId,
-        message: savedMsg.mensaje,
-        timestamp: savedMsg.created_at,
-        isFromHR
-      };
-
-      // 2. Notificación a Google Chat (Webhook)
+      // Notificación Google Chat (solo si escribe el colaborador)
       const webhookUrl = import.meta.env.VITE_GOOGLE_CHAT_WEBHOOK_URL;
       if (!isFromHR && webhookUrl) {
         fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: `📩 Mensaje de ${senderId}: ${message}` })
-        }).catch(err => console.error("Error Webhook:", err));
+          body: JSON.stringify({ text: `📩 Nuevo mensaje de ${senderId}: ${message}` })
+        }).catch(e => console.error("Webhook error:", e));
       }
 
-      return newMessage;
-
+      return {
+        id: savedMsg.id,
+        senderId: savedMsg.emisor_id,
+        receiverId: savedMsg.receptor_id,
+        message: savedMsg.mensaje,
+        timestamp: savedMsg.created_at,
+        isFromHR
+      };
     } catch (error) {
-      console.error("Error enviando mensaje real:", error);
+      console.error(error);
       throw error;
     }
   },
@@ -246,12 +285,12 @@ export const dataService = {
     return [];
   },
 
-  uploadEmployeeFile: async (fileData: Omit<EmployeeFile, 'id' | 'uploadedAt'>): Promise<EmployeeFile> => {
-    throw new Error("Upload File no implementado");
+  uploadEmployeeFile: async (_fileData: any): Promise<EmployeeFile> => {
+    throw new Error("Not implemented");
   }
 };
 
-// Helper simple para estados
+// Helper
 const mapStatusFromSupabase = (status: string): RequestStatus => {
   const map: Record<string, RequestStatus> = {
     'Pendiente': RequestStatus.PENDING,
