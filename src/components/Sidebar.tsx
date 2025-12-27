@@ -21,7 +21,7 @@ export default function Sidebar() {
     <div className="flex flex-col h-full bg-onix">
       <div className="p-6 hidden lg:block">
         <div className="flex items-center space-x-3 text-white mb-6">
-          <img src="/logo.png" alt="Disruptive Talent" className="w-10 h-10" />
+          <img src="/public/logo.png" alt="Disruptive Talent" className="w-10 h-10" />
           <span className="text-xl font-bold tracking-tight">Disruptive Talent</span>
         </div>
         <div className="text-xs text-topacio-300 uppercase tracking-wider font-semibold">
