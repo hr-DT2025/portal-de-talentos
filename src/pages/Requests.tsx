@@ -150,7 +150,9 @@ export default function Requests() {
           throw new Error('No se pudo obtener el ID de la nueva solicitud.');
       }
 
-      const n8nPayload = {
+      =========================PAYLOAD A N8N==========================
+ 
+      /**const n8nPayload = {
         requestId: newRequest.id,
         colaboradorId: user.id,
         colaboradorNombre: user.fullName || 'Usuario',
@@ -171,8 +173,46 @@ export default function Requests() {
           incluir_salario: includeSalary === 'Si',
           motivo: reason
         } : {})
-      };
+      };**/
+==========================paylod que funciona 10-1-26================
+    // 1. Primero obtenemos el ID de la empresa desde el perfil del usuario
+const { data: profileData, error: profileError } = await supabase
+  .from('profiles')
+  .select('empresa_id')
+  .eq('id', user.id)
+  .single();
 
+if (profileError) {
+  console.error("Error obteniendo el ID de la empresa:", profileError);
+}
+
+// 2. Construimos el Payload incluyendo el ID obtenido
+const n8nPayload = {
+  requestId: newRequest.id,
+  colaboradorId: user.id,
+  // Agregamos el ID de la empresa desde la DB
+  empresaId: profileData?.empresa_id || null, 
+  colaboradorNombre: user.fullName || 'Usuario',
+  colaboradorEmail: user.email || 'No disponible',
+  empresa: newRequest.companyName || companyName,
+  tipo: requestType,
+  fecha_solicitud: new Date().toISOString(),
+  
+  ...(requestType === 'Dia libre' ? {
+    fecha_inicio: startDate,
+    fecha_fin: endDate,
+    dias_totales: daysCount,
+    motivo: reason
+  } : {}),
+
+  ...(requestType === 'Constancia laboral' ? {
+    dirigido_a: addressedTo,
+    incluir_salario: includeSalary === 'Si',
+    motivo: reason
+  } : {})
+};
+
+// 3. Enviar a n8n...
       try {
         await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
