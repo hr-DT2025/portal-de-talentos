@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { dataService } from '../services/dataService';
 import { GoogleChatService } from '../services/googleChatService';
 import { ChatMessage } from '../types';
@@ -229,3 +229,4 @@ export default function Chat() {
     </div>
   );
 }
+
