@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { dataService } from '../services/dataService';
 import { Company, Request, RequestStatus, RequestType } from '../types';
 import { 
@@ -392,3 +392,4 @@ export default function DashboardHR() {
     </div>
   );
 }
+
