@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../App';
 import { dataService } from '../services/dataService';
-import { HeartHandshake, Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
+// Asumiendo que el logo está en la carpeta pública o assets
+// import logo from '../assets/logo.png'; 
 
 export default function Login() {
   const { login } = useAuth();
@@ -27,17 +29,39 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = () => {
+    alert("Redirigir a recuperación de contraseña...");
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-indigo-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-indigo-600 p-8 text-center">
-          <div className="mx-auto bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mb-4 backdrop-blur-sm">
-            <HeartHandshake className="text-white h-8 w-8" />
+        {/* Cabecera con Color Onix (Gris Oscuro)  */}
+        <div className="bg-[#262f3f] p-8 text-center relative">
+          <div className="flex flex-col items-center justify-center mb-4">
+            {/* Logo del repositorio */}
+            <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-3 backdrop-blur-sm p-3">
+               <img 
+                 src="/logo.png" 
+                 alt="Disruptive Talent Logo" 
+                 className="w-full h-full object-contain" 
+                 onError={(e) => {
+                   // Fallback visual si la imagen no carga
+                   e.target.style.display = 'none';
+                   e.target.parentElement.innerHTML = '<span class="text-white text-xs">Logo</span>';
+                 }}
+               />
+            </div>
+            {/* Nombre de la empresa discreto */}
+            <h3 className="text-[#37b1d3] text-sm font-semibold tracking-widest uppercase opacity-90">
+              Disruptive Talent
+            </h3>
           </div>
+          
           <h2 className="text-3xl font-bold text-white mb-2">
-            {isRegistering ? 'Únete al Equipo' : 'Bienvenido de nuevo'}
+            {isRegistering ? 'Únete al Equipo' : 'Bienvenido'}
           </h2>
-          <p className="text-indigo-100">
+          <p className="text-gray-300 text-sm">
             {isRegistering 
               ? 'Regístrate para acceder a tus beneficios.' 
               : 'Ingresa a tu portal de colaborador.'}
@@ -47,7 +71,7 @@ export default function Login() {
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Correo Corporativo</label>
+              <label className="block text-sm font-medium text-[#262f3f] mb-1">Correo Corporativo</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -55,14 +79,15 @@ export default function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                  placeholder="nombre@empresa.com"
+                  // Focus ring con color Topacio (Azul vibrante) 
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#37b1d3] focus:border-[#37b1d3] transition-all outline-none"
+                  placeholder="nombre@disruptivetalent.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+              <label className="block text-sm font-medium text-[#262f3f] mb-1">Contraseña</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -70,16 +95,30 @@ export default function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#37b1d3] focus:border-[#37b1d3] transition-all outline-none"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
+            {/* Opción Recuperar Contraseña */}
+            {!isRegistering && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm text-[#37b1d3] hover:text-[#2a8ba6] font-medium transition-colors"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-indigo-500/30"
+              [cite_start]// Botón con color Topacio (Azul vibrante) [cite: 352]
+              className="w-full bg-[#37b1d3] hover:bg-[#2a8ba6] text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-[#37b1d3]/30"
             >
               {loading ? (
                 <Loader2 className="animate-spin h-5 w-5" />
@@ -95,7 +134,7 @@ export default function Login() {
           <div className="mt-6 text-center">
             <button
               onClick={() => setIsRegistering(!isRegistering)}
-              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              className="text-sm text-[#262f3f] hover:text-[#37b1d3] font-medium transition-colors"
             >
               {isRegistering 
                 ? '¿Ya tienes cuenta? Inicia sesión' 
