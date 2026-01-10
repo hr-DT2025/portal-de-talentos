@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 import { supabase } from '../lib/supabase';
 import { ChatMessage } from '../types';
-import { Send, MessageCircle, User, Bot, ExternalLink, Loader2 } from 'lucide-react';
+import { Send, MessageCircle, User, Bot, Loader2, WifiOff } from 'lucide-react';
 
 export default function Chat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDisconnected, setIsDisconnected] = useState(false);
   const [hrbpData, setHrbpData] = useState<{
     webhook: string | null;
     chatId: string | null;
@@ -18,60 +19,45 @@ export default function Chat() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. CARGA INICIAL: Datos del HRBP y Mensajes previos
   useEffect(() => {
     const loadChatData = async () => {
       if (!user?.id) return;
       try {
         setLoading(true);
+        setIsDisconnected(false);
 
-        // A. Buscamos el empresa_id y el hrbp_id (código) del perfil del colaborador
+        // 1. Obtener perfil y datos de empresa
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select(`
-            empresa_id,
-            empresas (
-              nombre,
-              google_webhook_url,
-              hrbp_id
-            )
-          `)
+          .select('empresa_id, empresas(nombre, google_webhook_url, hrbp_id)')
           .eq('id', user.id)
           .single();
 
-        if (profileError) throw profileError;
+        if (profileError || !profile) throw new Error('Error al cargar perfil');
 
-        // B. Buscamos el ID de Google Chat y obtenemos el UUID real del HRBP (desde profiles)
-        // para poder usarlo como receptor_id en chat_history
-        if (profile?.empresas?.hrbp_id) {
-          const { data: hrbpProfile } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .eq('hrbp_code', profile.empresas.hrbp_id)
-            .single();
+        const hrbpCode = profile.empresas?.hrbp_id;
 
-          const { data: googleChatInfo } = await supabase
-            .from('ID_googlechat')
-            .select('google_chat, hrbp')
-            .eq('hrbp_code_ref', profile.empresas.hrbp_id)
-            .single();
+        // 2. Buscar datos del HRBP (UUID y Nombre)
+        if (hrbpCode) {
+          const [hrbpProfileRes, googleChatRes] = await Promise.all([
+            supabase.from('profiles').select('id, full_name').eq('hrbp_code', hrbpCode).single(),
+            supabase.from('ID_googlechat').select('google_chat, hrbp').eq('hrbp_code_ref', hrbpCode).single()
+          ]);
 
           setHrbpData({
             webhook: profile.empresas.google_webhook_url,
-            chatId: googleChatInfo?.google_chat || null,
-            nombre: hrbpProfile?.full_name || googleChatInfo?.hrbp || 'Consultor RRHH',
-            receptor_uuid: hrbpProfile?.id || null
+            chatId: googleChatRes.data?.google_chat || null,
+            nombre: hrbpProfileRes.data?.full_name || googleChatRes.data?.hrbp || 'Asesor de RRHH',
+            receptor_uuid: hrbpProfileRes.data?.id || null
           });
         }
 
-        // C. Cargar historial de mensajes entre el usuario y RRHH
-        const { data: chatMessages, error: chatError } = await supabase
+        // 3. Cargar mensajes
+        const { data: chatMessages } = await supabase
           .from('chat_history')
           .select('*')
           .or(`emisor_id.eq.${user.id},receptor_id.eq.${user.id}`)
           .order('created_at', { ascending: true });
-
-        if (chatError) throw chatError;
 
         if (chatMessages) {
           setMessages(chatMessages.map(m => ({
@@ -82,7 +68,8 @@ export default function Chat() {
           })));
         }
       } catch (error) {
-        console.error('Error al cargar datos del chat:', error);
+        console.error('Error:', error);
+        setIsDisconnected(true);
       } finally {
         setLoading(false);
       }
@@ -91,98 +78,81 @@ export default function Chat() {
     loadChatData();
   }, [user]);
 
-  // 2. REALTIME: Escuchar nuevos mensajes entrantes
+  // Realtime subscription
   useEffect(() => {
     if (!user?.id) return;
 
     const channel = supabase
       .channel('chat_realtime')
-      .on(
-        'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'chat_history',
-          filter: `receptor_id=eq.${user.id}` 
-        },
-        (payload) => {
-          const newMessage = payload.new;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: newMessage.id,
-              message: newMessage.mensaje,
-              isFromHR: true,
-              timestamp: newMessage.created_at,
-            },
-          ]);
-        }
-      )
-      .subscribe();
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'chat_history',
+        filter: `receptor_id=eq.${user.id}` 
+      }, (payload) => {
+        setMessages(prev => [...prev, {
+          id: payload.new.id,
+          message: payload.new.mensaje,
+          isFromHR: true,
+          timestamp: payload.new.created_at
+        }]);
+      })
+      .subscribe((status) => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setIsDisconnected(true);
+      });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  // Scroll automático al final
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 3. ENVIAR MENSAJE
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !user || !hrbpData) return;
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user || !hrbpData?.receptor_uuid) return;
 
     const messageText = newMessage.trim();
     setNewMessage('');
 
     try {
-      // A. Guardar en Base de Datos
       const { data: savedMsg, error: saveError } = await supabase
         .from('chat_history')
         .insert({
           emisor_id: user.id,
-          receptor_id: hrbpData.receptor_uuid, // UUID del HRBP obtenido en el primer useEffect
+          receptor_id: hrbpData.receptor_uuid,
           mensaje: messageText
         })
-        .select()
-        .single();
+        .select().single();
 
       if (saveError) throw saveError;
 
-      // B. Actualizar UI localmente
-      if (savedMsg) {
-        setMessages(prev => [...prev, {
-          id: savedMsg.id,
-          message: savedMsg.mensaje,
-          isFromHR: false,
-          timestamp: savedMsg.created_at
-        }]);
-      }
+      setMessages(prev => [...prev, {
+        id: savedMsg.id,
+        message: savedMsg.mensaje,
+        isFromHR: false,
+        timestamp: savedMsg.created_at
+      }]);
 
-      // C. Notificar a Google Chat (Webhook de la empresa)
       if (hrbpData.webhook) {
         fetch(hrbpData.webhook, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: `*💬 Nuevo mensaje de colaborador*\n*De:* ${user.full_name}\n*Mensaje:* ${messageText}\n*ID Google Chat:* \`${hrbpData.chatId || 'No configurado'}\``
+            text: `*💬 Mensaje de ${user.full_name}*\n${messageText}\n_ID: ${hrbpData.chatId || 'N/A'}_`
           })
-        }).catch(err => console.error("Error enviando a webhook:", err));
+        }).catch(() => null);
       }
-
     } catch (error) {
-      console.error('Error enviando mensaje:', error);
+      setIsDisconnected(true);
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('es-CL', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  // Función para capturar el Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   if (!user) return null;
@@ -190,73 +160,65 @@ export default function Chat() {
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Header */}
-      <div className="border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-100 p-2 rounded-lg">
-              <MessageCircle className="text-indigo-600" size={20} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">Asistencia RRHH</h3>
-              <p className="text-sm text-gray-500">
-                {loading ? 'Cargando asesor...' : `${hrbpData?.nombre} • Tu HRBP asignado`}
-              </p>
-            </div>
+      <div className="border-b border-gray-200 p-4 bg-white z-10">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-100 p-2 rounded-lg">
+            <MessageCircle className="text-indigo-600" size={20} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 leading-none">Asistencia RRHH</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              {loading ? 'Identificando...' : hrbpData ? `${hrbpData.nombre} • HRBP` : 'Buscando asesor...'}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Mensajes */}
+      {/* Connection Error Banner */}
+      {isDisconnected && (
+        <div className="bg-red-50 text-red-600 px-4 py-2 text-xs flex items-center gap-2 border-b border-red-100">
+          <WifiOff size={14} />
+          <span>No se pudo establecer conexión. Verifica tu internet o intenta más tarde.</span>
+        </div>
+      )}
+
+      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
-        {loading && messages.length === 0 ? (
-          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-500" /></div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-8">
-            <MessageCircle className="mx-auto text-gray-300 mb-2" size={48} />
-            <p className="text-gray-500 font-medium">¿En qué podemos ayudarte?</p>
-            <p className="text-xs text-gray-400">Escribe tu consulta y un HRBP te responderá aquí.</p>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div key={message.id} className={`flex ${message.isFromHR ? 'justify-start' : 'justify-end'}`}>
-              <div className={`max-w-[80%] px-4 py-2 rounded-2xl shadow-sm ${
-                message.isFromHR ? 'bg-white text-gray-800 border border-gray-100' : 'bg-indigo-600 text-white'
-              }`}>
-                <div className="flex items-center gap-2 mb-1 opacity-70">
-                  {message.isFromHR ? <Bot size={14} /> : <User size={14} />}
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    {message.isFromHR ? 'RRHH' : 'Tú'}
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed">{message.message}</p>
-                <p className={`text-[10px] mt-1 text-right ${message.isFromHR ? 'text-gray-400' : 'text-indigo-200'}`}>
-                  {formatTime(message.timestamp)}
-                </p>
-              </div>
+        {messages.map((m) => (
+          <div key={m.id} className={`flex ${m.isFromHR ? 'justify-start' : 'justify-end'}`}>
+            <div className={`max-w-[80%] px-4 py-2 rounded-2xl shadow-sm ${
+              m.isFromHR ? 'bg-white text-gray-800 border' : 'bg-indigo-600 text-white'
+            }`}>
+              <p className="text-sm">{m.message}</p>
+              <p className="text-[10px] mt-1 opacity-60 text-right">
+                {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
-          ))
-        )}
+          </div>
+        ))}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-gray-200 p-4 bg-white">
-        <form onSubmit={handleSendMessage} className="flex gap-2">
+      {/* Input Area */}
+      <div className="p-4 bg-white border-t">
+        <div className="flex gap-2 bg-gray-100 rounded-full px-4 py-2 items-center">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Escribe un mensaje..."
-            className="flex-1 px-4 py-2 bg-gray-100 border-none rounded-full focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+            onKeyDown={handleKeyDown}
+            placeholder="Escribe tu consulta y presiona Enter..."
+            className="flex-1 bg-transparent border-none focus:ring-0 text-sm outline-none"
+            disabled={loading}
           />
-          <button
-            type="submit"
+          <button 
+            onClick={handleSendMessage}
             disabled={!newMessage.trim() || loading}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white p-2 rounded-full transition-all shadow-md active:scale-95"
+            className="text-indigo-600 disabled:text-gray-400"
           >
-            <Send size={18} />
+            {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );
