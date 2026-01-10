@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { dataService } from '../services/dataService';
 import { getEmotionalFeedback } from '../services/geminiService';
 import { Project, Mood, Role } from '../types';
