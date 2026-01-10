@@ -260,18 +260,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <button className="w-full bg-white border-2 border-dashed border-gray-200 p-4 rounded-2xl flex items-center justify-between hover:border-[#37b1d3] hover:bg-[#37b1d3]/5 transition-all group">
-            <div className="flex items-center gap-3">
-              <div className="bg-green-100 p-2 rounded-lg text-green-600">
-                <MessageSquare size={20} />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-800">Consultar RRHH</p>
-                <p className="text-xs text-gray-400">Canal de Google Chat</p>
-              </div>
-            </div>
-            <ExternalLink size={16} className="text-gray-300 group-hover:text-[#37b1d3]" />
-          </button>
         </div>
       </div>
     </div>
