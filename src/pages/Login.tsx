@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useAuth } from '../App';
 import { dataService } from '../services/dataService';
 import { Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
-// Asumiendo que el logo está en la carpeta pública o assets
-// import logo from '../assets/logo.png'; 
 
 export default function Login() {
   const { login } = useAuth();
@@ -36,7 +34,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Cabecera con Color Onix (Gris Oscuro)  */}
+        {/* Cabecera con Color Onix (Gris Oscuro) */}
         <div className="bg-[#262f3f] p-8 text-center relative">
           <div className="flex flex-col items-center justify-center mb-4">
             {/* Logo del repositorio */}
@@ -47,8 +45,11 @@ export default function Login() {
                  className="w-full h-full object-contain" 
                  onError={(e) => {
                    // Fallback visual si la imagen no carga
-                   e.target.style.display = 'none';
-                   e.target.parentElement.innerHTML = '<span class="text-white text-xs">Logo</span>';
+                   const target = e.target as HTMLImageElement;
+                   target.style.display = 'none';
+                   if (target.parentElement) {
+                      target.parentElement.innerHTML = '<span class="text-white text-xs">Logo</span>';
+                   }
                  }}
                />
             </div>
@@ -117,7 +118,6 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              [cite_start]// Botón con color Topacio (Azul vibrante) [cite: 352]
               className="w-full bg-[#37b1d3] hover:bg-[#2a8ba6] text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-[#37b1d3]/30"
             >
               {loading ? (
