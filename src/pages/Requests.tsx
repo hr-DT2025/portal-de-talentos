@@ -150,7 +150,7 @@ export default function Requests() {
           throw new Error('No se pudo obtener el ID de la nueva solicitud.');
       }
 
-      =========================PAYLOAD A N8N==========================
+      //=========================PAYLOAD A N8N==========================
  
       /**const n8nPayload = {
         requestId: newRequest.id,
@@ -174,7 +174,7 @@ export default function Requests() {
           motivo: reason
         } : {})
       };**/
-==========================paylod que funciona 10-1-26================
+//==========================paylod que funciona 10-1-26================
     // 1. Primero obtenemos el ID de la empresa desde el perfil del usuario
 const { data: profileData, error: profileError } = await supabase
   .from('profiles')
