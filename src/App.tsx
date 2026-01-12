@@ -8,11 +8,16 @@ import Requests from './pages/Requests';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat';
 import EmployeeFiles from './pages/EmployeeFiles';
-import Expediente from './pages/Expediente'; // <--- NUEVA IMPORTACIÓN
+import Expediente from './pages/Expediente';
 import Sidebar from './components/Sidebar';
 import SessionTimeoutModal from './components/SessionTimeoutModal';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
 import { Menu, X } from 'lucide-react';
+
+// --- NUEVAS IMPORTACIONES ---
+import UpdatePassword from './pages/UpdatePassword'; // Asumí esta importación basada en tu ruta
+import LoginCliente from './pages/LoginCliente';       // <--- IMPORTADO
+import RegisterCliente from './pages/RegisterCliente'; // <--- IMPORTADO
 
 const SESSION_TIMEOUT = 20 * 60 * 1000;
 const WARNING_TIME = 60 * 1000;
@@ -136,18 +141,23 @@ export default function App() {
     <AuthContext.Provider value={{ user, login, logout }}>
       <HashRouter>
         <Routes>
-          {/* Rutas Públicas */}
+          {/* --- Rutas Públicas --- */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/update-password" element={<UpdatePassword />} /> {/* NUEVO */}
           
-          {/* Rutas Comunes (Dashboard) */}
+          {/* --- NUEVAS RUTAS PARA CLIENTES --- */}
+          <Route path="/login-cliente" element={<LoginCliente />} />
+          <Route path="/registro-cliente" element={<RegisterCliente />} />
+          
+          {/* --- Rutas Comunes (Dashboard) --- */}
           <Route path="/dashboard" element={
             <ProtectedRoute allowedRoles={[Role.COLLABORATOR, Role.HR, Role.SUPERADMIN, Role.DIRECTOR]}>
               <Layout><Dashboard /></Layout>
             </ProtectedRoute>
           } />
 
-          {/* --- NUEVA RUTA EXPEDIENTE --- */}
+          {/* --- RUTA EXPEDIENTE --- */}
           <Route path="/my-file" element={
             <ProtectedRoute allowedRoles={[Role.COLLABORATOR, Role.HR, Role.SUPERADMIN, Role.DIRECTOR]}>
               <Layout><Expediente /></Layout>
@@ -158,7 +168,7 @@ export default function App() {
           <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Layout><Chat /></Layout></ProtectedRoute>} />
           
-          {/* Rutas HR y Admin (Actualizadas a Array) */}
+          {/* Rutas HR y Admin */}
           <Route path="/hr-dashboard" element={
             <ProtectedRoute allowedRoles={[Role.HR, Role.SUPERADMIN, Role.DIRECTOR]}>
               <Layout><DashboardHR /></Layout>
